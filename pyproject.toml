@@ -22,7 +22,6 @@ include = [
   "openhands/integrations/vscode/openhands-vscode-0.0.1.vsix",
   "microagents/**/*",
 ]
-build = "build_vscode.py" # Build VSCode extension during Poetry build
 
 [tool.poetry.dependencies]
 python = "^3.12,<3.14"
@@ -105,31 +104,7 @@ e2b-code-interpreter = { version = "^2.0.0", optional = true }
 [tool.poetry.extras]
 third_party_runtimes = [ "e2b-code-interpreter", "modal", "runloop-api-client", "daytona" ]
 
-[tool.poetry.group.dev]
-optional = true
 
-[tool.poetry.group.dev.dependencies]
-ruff = "0.12.5"
-mypy = "1.17.0"
-pre-commit = "4.2.0"
-build = "*"
-types-setuptools = "*"
-pytest = "^8.4.0"
-
-[tool.poetry.group.test]
-optional = true
-
-[tool.poetry.group.test.dependencies]
-pytest = "*"
-pytest-cov = "*"
-pytest-asyncio = "*"
-pytest-forked = "*"
-pytest-xdist = "*"
-pytest-playwright = "^0.7.0"
-pytest-timeout = "^2.4.0"
-pandas = "*"
-reportlab = "*"
-gevent = ">=24.2.1,<26.0.0"
 
 [tool.poetry.group.runtime]
 optional = true
@@ -139,60 +114,12 @@ jupyterlab = "*"
 notebook = "*"
 flake8 = "*"
 
-[tool.poetry.group.evaluation]
-optional = true
-
-[tool.poetry.group.evaluation.dependencies]
-streamlit = "*"
-whatthepatch = "*"
-retry = "*"
-evaluate = "*"
-visualswebench = { git = "https://github.com/luolin101/Visual-SWE-bench.git" }
-swegym = { git = "https://github.com/SWE-Gym/SWE-Bench-Package.git" }
-commit0 = "*"
-func_timeout = "*"
-sympy = "*"
-gdown = "*"
-matplotlib = "*"
-seaborn = "*"
-tabulate = "*"
-browsergym = "0.13.3"
-browsergym-webarena = "0.13.3"
-browsergym-miniwob = "0.13.3"
-browsergym-visualwebarena = "0.13.3"
-boto3-stubs = { extras = [ "s3" ], version = "^1.37.19" }
-# transitive dependency, pinned here to avoid conflicts
-pyarrow = "21.0.0"
-datasets = "*"
-joblib = "*"
-swebench = { git = "https://github.com/ryanhoangt/SWE-bench.git", rev = "fix-modal-patch-eval" }
 
 [tool.poetry.scripts]
 openhands = "openhands.cli.entry:main"
 
-[tool.poetry.group.testgeneval.dependencies]
-fuzzywuzzy = "^0.18.0"
-rouge = "^1.0.1"
-python-levenshtein = ">=0.26.1,<0.28.0"
-tree-sitter-python = "^0.23.6"
 
 [tool.poetry-dynamic-versioning]
 enable = true
 style = "semver"
 
-[tool.autopep8]
-# autopep8 fights with mypy on line length issue
-ignore = [ "E501" ]
-
-[tool.black]
-# prevent black (if installed) from changing single quotes to double quotes
-skip-string-normalization = true
-
-[tool.ruff]
-lint.select = [ "D" ]
-# ignore warnings for missing docstrings
-lint.ignore = [ "D1" ]
-lint.pydocstyle.convention = "google"
-
-[tool.coverage.run]
-concurrency = [ "gevent" ]

@@ -147,10 +147,8 @@ def get_cli_parser() -> argparse.ArgumentParser:
     # Create a description with welcome message explaining available commands
     description = (
         'Welcome to OpenHands: Code Less, Make More\n\n'
-        'OpenHands supports two main commands:\n'
-        '  serve - Launch the OpenHands GUI server (web interface)\n'
-        '  cli   - Run OpenHands in CLI mode (terminal interface)\n\n'
-        'Running "openhands" without a command is the same as "openhands cli"'
+        'OpenHands CLI - AI software engineer for terminal interface\n\n'
+        'Running "openhands" starts the CLI mode directly'
     )
 
     parser = argparse.ArgumentParser(
@@ -164,25 +162,8 @@ def get_cli_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         dest='command',
         title='commands',
-        description='OpenHands supports two main commands:',
+        description='OpenHands CLI mode:',
         metavar='COMMAND',
-    )
-
-    # Add 'serve' subcommand
-    serve_parser = subparsers.add_parser(
-        'serve', help='Launch the OpenHands GUI server using Docker (web interface)'
-    )
-    serve_parser.add_argument(
-        '--mount-cwd',
-        help='Mount the current working directory into the GUI server container',
-        action='store_true',
-        default=False,
-    )
-    serve_parser.add_argument(
-        '--gpu',
-        help='Enable GPU support by mounting all GPUs into the Docker container via nvidia-docker',
-        action='store_true',
-        default=False,
     )
 
     # Add 'cli' subcommand - import all the existing CLI arguments
