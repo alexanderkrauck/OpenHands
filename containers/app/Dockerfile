@@ -1,14 +1,4 @@
 ARG OPENHANDS_BUILD_VERSION=dev
-FROM node:24.3.0-bookworm-slim AS frontend-builder
-
-WORKDIR /app
-
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-
-COPY frontend ./
-RUN npm run build
-
 FROM python:3.12.10-slim AS base
 FROM base AS backend-builder
 
@@ -71,12 +61,12 @@ ENV VIRTUAL_ENV=/app/.venv \
     PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH='/app'
 
-COPY --chown=openhands:openhands --chmod=770 --from=backend-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+COPY --chown=openhands:openhands --from=backend-builder ${VIRTUAL_ENV} ${VIRTUAL_ENV}
 
-COPY --chown=openhands:openhands --chmod=770 ./microagents ./microagents
-COPY --chown=openhands:openhands --chmod=770 ./openhands ./openhands
-COPY --chown=openhands:openhands --chmod=777 ./openhands/runtime/plugins ./openhands/runtime/plugins
+COPY --chown=openhands:openhands ./microagents ./microagents
+COPY --chown=openhands:openhands ./openhands ./openhands
 COPY --chown=openhands:openhands pyproject.toml poetry.lock README.md MANIFEST.in LICENSE ./
+RUN chmod -R 770 /app && chmod -R 777 ./openhands/runtime/plugins
 
 # This is run as "openhands" user, and will create __pycache__ with openhands:openhands ownership
 RUN python openhands/core/download.py # No-op to download assets
@@ -84,8 +74,9 @@ RUN python openhands/core/download.py # No-op to download assets
 # openhands:openhands -> openhands:openhands
 RUN find /app \! -group openhands -exec chgrp openhands {} +
 
-COPY --chown=openhands:openhands --chmod=770 --from=frontend-builder /app/build ./frontend/build
-COPY --chown=openhands:openhands --chmod=770 ./containers/app/entrypoint.sh /app/entrypoint.sh
+# Frontend removed - API only mode
+COPY --chown=openhands:openhands ./containers/app/entrypoint.sh /app/entrypoint.sh
+RUN chmod 770 /app/entrypoint.sh
 
 USER root
 
