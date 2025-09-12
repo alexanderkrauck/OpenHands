@@ -1,0 +1,19 @@
+
+version: '3.8'
+
+services:
+  openhands:
+    build:
+      context: .
+      dockerfile: containers/app/Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./openhands_data:/.openhands
+      - ./workspace:/opt/workspace_base
+    environment:
+      - SANDBOX_USER_ID=0  # Run as root for simplicity; adjust if needed
+      - FILE_STORE=local
+      - WORKSPACE_BASE=/opt/workspace_base
+      - INIT_GIT_IN_EMPTY_WORKSPACE=1
+    restart: unless-stopped
