@@ -25,7 +25,6 @@ from openhands.events.observation import (
     Observation,
 )
 from openhands.events.serialization import event_to_dict, observation_from_dict
-from openhands.integrations.provider import PROVIDER_TOKEN_TYPE
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.runtime.impl.action_execution.action_execution_client import (
     ActionExecutionClient,
@@ -144,7 +143,6 @@ class LocalRuntime(ActionExecutionClient):
         attach_to_existing: bool = False,
         headless_mode: bool = True,
         user_id: str | None = None,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
     ) -> None:
         self.is_windows = sys.platform == 'win32'
         if self.is_windows:

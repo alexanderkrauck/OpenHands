@@ -29,14 +29,22 @@ class MCPClient(BaseModel):
     description: str = 'MCP client tools for server interaction'
     tools: list[MCPClientTool] = Field(default_factory=list)
     tool_map: dict[str, MCPClientTool] = Field(default_factory=dict)
+    persistent_connection: bool = Field(default=True)
+    is_connected: bool = Field(default=False)
+    _connection_context: Optional[object] = None  # Store the context manager
 
     async def _initialize_and_list_tools(self) -> None:
         """Initialize session and populate tool map."""
         if not self.client:
             raise RuntimeError('Session not initialized.')
 
+        # SHTTP connections are stateless, so we always use context manager
+        # The server maintains state, not the client connection
         async with self.client:
             tools = await self.client.list_tools()
+            # Mark as connected for tracking purposes
+            if self.persistent_connection:
+                self.is_connected = True
 
         # Clear existing tools
         self.tools = []
@@ -152,5 +160,62 @@ class MCPClient(BaseModel):
         if not self.client:
             raise RuntimeError('Client session is not available.')
 
-        async with self.client:
-            return await self.client.call_tool_mcp(name=tool_name, arguments=args)
+        # For persistent connections, keep the connection open after first use
+        if self.persistent_connection:
+            # If not connected yet, establish the connection and keep it open
+            if not self.is_connected or self._connection_context is None:
+                logger.info(f"Establishing persistent connection to MCP server")
+                try:
+                    # Enter the context manager and store it
+                    self._connection_context = await self.client.__aenter__()
+                    self.is_connected = True
+                    logger.info(f"Persistent connection established")
+                except Exception as e:
+                    logger.error(f"Failed to establish persistent connection: {e}")
+                    self.is_connected = False
+                    raise
+            
+            # Use the already-open connection
+            try:
+                logger.info(f"Calling tool {tool_name} with persistent connection")
+                result = await self.client.call_tool_mcp(name=tool_name, arguments=args)
+                return result
+            except Exception as e:
+                logger.debug(f"Error calling tool {tool_name}: {e}")
+                # Connection might be broken, mark as disconnected
+                self.is_connected = False
+                self._connection_context = None
+                raise
+        else:
+            # Non-persistent mode: open and close for each call (original behavior)
+            try:
+                async with self.client:
+                    result = await self.client.call_tool_mcp(name=tool_name, arguments=args)
+                    return result
+            except Exception as e:
+                logger.debug(f"Error calling tool {tool_name}: {e}")
+                raise
+    
+    async def reconnect(self) -> None:
+        """Reconnect to the MCP server if connection was lost."""
+        if self.client and not self.is_connected:
+            try:
+                await self.client.__aenter__()
+                self.is_connected = True
+                logger.info("Successfully reconnected to MCP server")
+            except Exception as e:
+                logger.error(f"Failed to reconnect to MCP server: {e}")
+                raise
+    
+    async def disconnect(self) -> None:
+        """Disconnect from the MCP server (for persistent connections)."""
+        if self.persistent_connection and self.is_connected and self.client and self._connection_context is not None:
+            try:
+                await self.client.__aexit__(None, None, None)
+                self.is_connected = False
+                self._connection_context = None
+                logger.info("Disconnected from MCP server")
+            except Exception as e:
+                logger.warning(f"Error during disconnect: {e}")
+                self.is_connected = False
+                self._connection_context = None

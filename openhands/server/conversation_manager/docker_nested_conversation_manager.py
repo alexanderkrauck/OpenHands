@@ -21,7 +21,6 @@ from openhands.events.action import MessageAction
 from openhands.events.nested_event_store import NestedEventStore
 from openhands.events.stream import EventStream
 from openhands.experiments.experiment_manager import ExperimentManagerImpl
-from openhands.integrations.provider import PROVIDER_TOKEN_TYPE, ProviderHandler
 from openhands.runtime import get_runtime_cls
 from openhands.runtime.impl.docker.docker_runtime import DockerRuntime
 from openhands.runtime.runtime_status import RuntimeStatus
@@ -216,26 +215,7 @@ class DockerNestedConversationManager(ConversationManager):
                 response.raise_for_status()
 
                 # Setup provider tokens
-                provider_handler = self._get_provider_handler(settings)
-                provider_tokens = provider_handler.provider_tokens
                 if provider_tokens:
-                    provider_tokens_json = {
-                        k.value: {
-                            'token': v.token.get_secret_value(),
-                            'user_id': v.user_id,
-                            'host': v.host,
-                        }
-                        for k, v in provider_tokens.items()
-                        if v.token
-                    }
-                    response = await client.post(
-                        f'{api_url}/api/add-git-providers',
-                        json={
-                            'provider_tokens': provider_tokens_json,
-                        },
-                    )
-                    response.raise_for_status()
-
                 # Setup custom secrets
                 custom_secrets = settings.custom_secrets  # type: ignore
                 if custom_secrets:
@@ -521,15 +501,6 @@ class DockerNestedConversationManager(ConversationManager):
                 )
                 await self.close_session(oldest_conversation_id)
 
-    def _get_provider_handler(self, settings: Settings) -> ProviderHandler:
-        provider_tokens = None
-        if isinstance(settings, ConversationInitData):
-            provider_tokens = settings.git_provider_tokens
-        provider_handler = ProviderHandler(
-            provider_tokens=provider_tokens
-            or cast(PROVIDER_TOKEN_TYPE, MappingProxyType({}))
-        )
-        return provider_handler
 
     async def _create_runtime(
         self, sid: str, user_id: str | None, settings: Settings

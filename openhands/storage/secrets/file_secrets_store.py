@@ -20,17 +20,6 @@ class FileSecretsStore(SecretsStore):
         try:
             json_str = await call_sync_from_async(self.file_store.read, self.path)
             kwargs = json.loads(json_str)
-            provider_tokens = {
-                k: v
-                for k, v in (kwargs.get('provider_tokens') or {}).items()
-                if v.get('token')
-            }
-            kwargs['provider_tokens'] = provider_tokens
-            secrets = UserSecrets(**kwargs)
-            return secrets
-        except FileNotFoundError:
-            return None
-
     async def store(self, secrets: UserSecrets) -> None:
         json_str = secrets.model_dump_json(context={'expose_secrets': True})
         await call_sync_from_async(self.file_store.write, self.path, json_str)

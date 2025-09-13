@@ -22,7 +22,6 @@ from openhands.server.dependencies import get_dependencies
 from openhands.server.file_config import FILES_TO_IGNORE
 from openhands.server.files import POSTUploadFilesModel
 from openhands.server.session.conversation import ServerConversation
-from openhands.server.user_auth import get_user_id
 from openhands.server.utils import get_conversation, get_conversation_store
 from openhands.storage.conversation.conversation_store import ConversationStore
 from openhands.utils.async_utils import call_sync_from_async

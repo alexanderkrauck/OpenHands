@@ -19,7 +19,6 @@ from openhands.events.observation.agent import (
     AgentStateChangedObservation,
 )
 from openhands.events.serialization import event_to_dict
-from openhands.integrations.service_types import ProviderType
 from openhands.server.services.conversation_service import (
     setup_init_conversation_settings,
 )
@@ -54,7 +53,6 @@ async def connect(connection_id: str, environ: dict) -> None:
         for item in raw_list:
             providers_list.extend(item.split(',') if isinstance(item, str) else [])
         providers_list = [p for p in providers_list if p]
-        providers_set = [ProviderType(p) for p in providers_list]
 
         if not conversation_id:
             logger.error('No conversation_id in query params')

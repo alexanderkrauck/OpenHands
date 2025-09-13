@@ -10,7 +10,7 @@ import tempfile
 from abc import abstractmethod
 from pathlib import Path
 from types import MappingProxyType
-from typing import Callable, cast
+from typing import Any, Callable, cast
 from zipfile import ZipFile
 
 import httpx
@@ -48,12 +48,6 @@ from openhands.events.observation import (
     UserRejectObservation,
 )
 from openhands.events.serialization.action import ACTION_TYPE_TO_CLASS
-from openhands.integrations.provider import (
-    PROVIDER_TOKEN_TYPE,
-    ProviderHandler,
-    ProviderType,
-)
-from openhands.integrations.service_types import AuthenticationError
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.microagent import (
     BaseMicroagent,
@@ -67,7 +61,6 @@ from openhands.runtime.plugins import (
 from openhands.runtime.runtime_status import RuntimeStatus
 from openhands.runtime.utils.edit import FileEditRuntimeMixin
 from openhands.runtime.utils.git_handler import CommandResult, GitHandler
-from openhands.security import SecurityAnalyzer, options
 from openhands.storage.locations import get_conversation_dir
 from openhands.utils.async_utils import (
     GENERAL_TIMEOUT,
@@ -137,7 +130,6 @@ class Runtime(FileEditRuntimeMixin):
         attach_to_existing: bool = False,
         headless_mode: bool = False,
         user_id: str | None = None,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
     ):
         self.git_handler = GitHandler(
             execute_shell_fn=self._execute_shell_fn_git_handler,
@@ -166,17 +158,6 @@ class Runtime(FileEditRuntimeMixin):
         if env_vars is not None:
             self.initial_env_vars.update(env_vars)
 
-        self.provider_handler = ProviderHandler(
-            provider_tokens=git_provider_tokens
-            or cast(PROVIDER_TOKEN_TYPE, MappingProxyType({})),
-            external_auth_id=user_id,
-            external_token_manager=True,
-        )
-        raw_env_vars: dict[str, str] = call_async_from_sync(
-            self.provider_handler.get_env_vars, GENERAL_TIMEOUT, True, None, False
-        )
-        self.initial_env_vars.update(raw_env_vars)
-
         self._vscode_enabled = any(
             isinstance(plugin, VSCodeRequirement) for plugin in self.plugins
         )
@@ -189,19 +170,10 @@ class Runtime(FileEditRuntimeMixin):
         )
 
         self.user_id = user_id
-        self.git_provider_tokens = git_provider_tokens
-        self.runtime_status = None
+        # Initialize MCP client cache for persistent connections
+        self._mcp_clients: dict[str, Any] = {}
+        self._mcp_clients_lock = asyncio.Lock()
 
-        # Initialize security analyzer
-        self.security_analyzer = None
-        if self.config.security.security_analyzer:
-            analyzer_cls = options.SecurityAnalyzers.get(
-                self.config.security.security_analyzer, SecurityAnalyzer
-            )
-            self.security_analyzer = analyzer_cls()
-            logger.debug(
-                f'Security analyzer {analyzer_cls.__name__} initialized for runtime {self.sid}'
-            )
 
     @property
     def runtime_initialized(self) -> bool:
@@ -222,7 +194,43 @@ class Runtime(FileEditRuntimeMixin):
         """This should only be called by conversation manager or closing the session.
         If called for instance by error handling, it could prevent recovery.
         """
-        pass
+        # Clean up MCP clients on close
+        asyncio.create_task(self._cleanup_mcp_clients())
+
+    async def _cleanup_mcp_clients(self) -> None:
+        """Clean up all MCP client connections."""
+        async with self._mcp_clients_lock:
+            for client_key in list(self._mcp_clients.keys()):
+                try:
+                    client = self._mcp_clients[client_key]
+                    if hasattr(client, 'client') and client.client:
+                        # Close the client connection if it has one
+                        await client.client.__aexit__(None, None, None)
+                except Exception as e:
+                    logger.warning(f"Error closing MCP client {client_key}: {e}")
+            self._mcp_clients.clear()
+
+    async def get_or_create_mcp_client(self, client_key: str, create_func: Callable) -> Any:
+        """Get an existing MCP client or create a new one if it doesn't exist.
+        
+        Args:
+            client_key: Unique key for the client (e.g., server URL or name)
+            create_func: Async function to create the client if it doesn't exist
+            
+        Returns:
+            The MCP client instance
+        """
+        async with self._mcp_clients_lock:
+            if client_key not in self._mcp_clients:
+                logger.info(f"Creating new MCP client for {client_key}")
+                self._mcp_clients[client_key] = await create_func()
+            else:
+                logger.info(f"Reusing existing MCP client for {client_key}")
+            return self._mcp_clients[client_key]
+
+    def get_cached_mcp_clients(self) -> dict[str, Any]:
+        """Get all cached MCP clients (for read-only access)."""
+        return self._mcp_clients.copy()
 
     @classmethod
     async def delete(cls, conversation_id: str) -> None:
@@ -323,40 +331,7 @@ class Runtime(FileEditRuntimeMixin):
 
     async def _export_latest_git_provider_tokens(self, event: Action) -> None:
         """Refresh runtime provider tokens when agent attemps to run action with provider token"""
-        providers_called = ProviderHandler.check_cmd_action_for_provider_token_ref(
-            event
-        )
-
-        if not providers_called:
-            return
-
-        provider_handler = ProviderHandler(
-            provider_tokens=self.git_provider_tokens
-            or cast(PROVIDER_TOKEN_TYPE, MappingProxyType({})),
-            external_auth_id=self.user_id,
-            external_token_manager=True,
-            session_api_key=self.session_api_key,
-            sid=self.sid,
-        )
-
-        logger.info(f'Fetching latest provider tokens for runtime: {self.sid}')
-        env_vars = await provider_handler.get_env_vars(
-            providers=providers_called, expose_secrets=False, get_latest=True
-        )
-
-        if len(env_vars) == 0:
-            return
-
-        try:
-            if self.event_stream:
-                await provider_handler.set_event_stream_secrets(
-                    self.event_stream, env_vars=env_vars
-                )
-            self.add_env_vars(provider_handler.expose_env_vars(env_vars))
-        except Exception as e:
-            logger.warning(
-                f'Failed export latest github token to runtime: {self.sid}, {e}'
-            )
+        return
 
     async def _handle_action(self, event: Action) -> None:
         if event.timeout is None:
@@ -400,65 +375,11 @@ class Runtime(FileEditRuntimeMixin):
 
     async def clone_or_init_repo(
         self,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None,
         selected_repository: str | None,
         selected_branch: str | None,
     ) -> str:
-        if not selected_repository:
-            if self.config.init_git_in_empty_workspace:
-                logger.debug(
-                    'No repository selected. Initializing a new git repository in the workspace.'
-                )
-                action = CmdRunAction(
-                    command=f'git init && git config --global --add safe.directory {self.workspace_root}'
-                )
-                await call_sync_from_async(self.run_action, action)
-            else:
-                logger.info(
-                    'In workspace mount mode, not initializing a new git repository.'
-                )
-            return ''
-
-        remote_repo_url = await self.provider_handler.get_authenticated_git_url(
-            selected_repository
-        )
-
-        if not remote_repo_url:
-            raise ValueError('Missing either Git token or valid repository')
-
-        if self.status_callback:
-            self.status_callback(
-                'info', RuntimeStatus.SETTING_UP_WORKSPACE, 'Setting up workspace...'
-            )
-
-        dir_name = selected_repository.split('/')[-1]
-
-        # Generate a random branch name to avoid conflicts
-        random_str = ''.join(
-            random.choices(string.ascii_lowercase + string.digits, k=8)
-        )
-        openhands_workspace_branch = f'openhands-workspace-{random_str}'
-
-        # Clone repository command
-        clone_command = f'git clone {remote_repo_url} {dir_name}'
-
-        # Checkout to appropriate branch
-        checkout_command = (
-            f'git checkout {selected_branch}'
-            if selected_branch
-            else f'git checkout -b {openhands_workspace_branch}'
-        )
-
-        clone_action = CmdRunAction(command=clone_command)
-        await call_sync_from_async(self.run_action, clone_action)
-
-        cd_checkout_action = CmdRunAction(
-            command=f'cd {dir_name} && {checkout_command}'
-        )
-        action = cd_checkout_action
-        self.log('info', f'Cloning repo: {selected_repository}')
-        await call_sync_from_async(self.run_action, action)
-        return dir_name
+        # Git functionality removed - return empty string
+        return ''
 
     def maybe_run_setup_script(self):
         """Run .openhands/setup.sh if it exists in the workspace or repository."""
@@ -648,20 +569,8 @@ fi
         Returns:
             True if the repository is hosted on GitLab, False otherwise
         """
-        try:
-            provider_handler = ProviderHandler(
-                self.git_provider_tokens or MappingProxyType({})
-            )
-            repository = call_async_from_sync(
-                provider_handler.verify_repo_provider,
-                GENERAL_TIMEOUT,
-                repo_name,
-            )
-            return repository.git_provider == ProviderType.GITLAB
-        except Exception:
-            # If we can't determine the provider, assume it's not GitLab
-            # This is a safe fallback since we'll just use the default .openhands
-            return False
+        # Git integration removed - always return False
+        return False
 
     def get_microagents_from_org_or_user(
         self, selected_repository: str
@@ -736,7 +645,6 @@ fi
             # Get authenticated URL and do a shallow clone (--depth 1) for efficiency
             try:
                 remote_url = call_async_from_sync(
-                    self.provider_handler.get_authenticated_git_url,
                     GENERAL_TIMEOUT,
                     org_openhands_repo,
                 )

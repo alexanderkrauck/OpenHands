@@ -16,10 +16,6 @@ from openhands.core.schema.agent import AgentState
 from openhands.events.action import ChangeAgentStateAction, MessageAction
 from openhands.events.event import Event, EventSource
 from openhands.events.stream import EventStream
-from openhands.integrations.provider import (
-    CUSTOM_SECRETS_TYPE,
-    PROVIDER_TOKEN_TYPE,
-    ProviderHandler,
 )
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.mcp import add_mcp_tools_to_agent
@@ -93,8 +89,6 @@ class AgentSession:
         config: OpenHandsConfig,
         agent: Agent,
         max_iterations: int,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
-        custom_secrets: CUSTOM_SECRETS_TYPE | None = None,
         max_budget_per_task: float | None = None,
         agent_to_llm_config: dict[str, LLMConfig] | None = None,
         agent_configs: dict[str, AgentConfig] | None = None,
@@ -136,19 +130,11 @@ class AgentSession:
                 runtime_name=runtime_name,
                 config=config,
                 agent=agent,
-                git_provider_tokens=git_provider_tokens,
-                custom_secrets=custom_secrets,
-                selected_repository=selected_repository,
-                selected_branch=selected_branch,
-            )
-
             repo_directory = None
             if self.runtime and runtime_connected and selected_repository:
                 repo_directory = selected_repository.split('/')[-1]
 
             if git_provider_tokens:
-                provider_handler = ProviderHandler(provider_tokens=git_provider_tokens)
-                await provider_handler.set_event_stream_secrets(self.event_stream)
 
             if custom_secrets:
                 custom_secrets_handler.set_event_stream_secrets(self.event_stream)
@@ -276,8 +262,6 @@ class AgentSession:
 
     def override_provider_tokens_with_custom_secret(
         self,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None,
-        custom_secrets: CUSTOM_SECRETS_TYPE | None,
     ):
         if git_provider_tokens and custom_secrets:
             # Use dictionary comprehension to avoid modifying dictionary during iteration
@@ -285,8 +269,6 @@ class AgentSession:
                 provider: token
                 for provider, token in git_provider_tokens.items()
                 if not (
-                    ProviderHandler.get_provider_env_key(provider) in custom_secrets
-                    or ProviderHandler.get_provider_env_key(provider).upper()
                     in custom_secrets
                 )
             }
@@ -298,8 +280,6 @@ class AgentSession:
         runtime_name: str,
         config: OpenHandsConfig,
         agent: Agent,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
-        custom_secrets: CUSTOM_SECRETS_TYPE | None = None,
         selected_repository: str | None = None,
         selected_branch: str | None = None,
     ) -> bool:
@@ -337,18 +317,7 @@ class AgentSession:
                 status_callback=self._status_callback,
                 headless_mode=False,
                 attach_to_existing=False,
-                git_provider_tokens=overrided_tokens,
-                env_vars=env_vars,
-                user_id=self.user_id,
-            )
-        else:
-            provider_handler = ProviderHandler(
-                provider_tokens=git_provider_tokens
-                or cast(PROVIDER_TOKEN_TYPE, MappingProxyType({}))
-            )
-
             # Merge git provider tokens with custom secrets before passing over to runtime
-            env_vars.update(await provider_handler.get_env_vars(expose_secrets=True))
             self.runtime = runtime_cls(
                 config=config,
                 event_stream=self.event_stream,
@@ -359,9 +328,6 @@ class AgentSession:
                 headless_mode=False,
                 attach_to_existing=False,
                 env_vars=env_vars,
-                git_provider_tokens=git_provider_tokens,
-            )
-
         try:
             await self.runtime.connect()
         except AgentRuntimeUnavailableError as e:
@@ -440,7 +406,6 @@ class AgentSession:
             status_callback=self._status_callback,
             initial_state=initial_state,
             replay_events=replay_events,
-            security_analyzer=self.runtime.security_analyzer if self.runtime else None,
         )
 
         return (controller, initial_state is not None)

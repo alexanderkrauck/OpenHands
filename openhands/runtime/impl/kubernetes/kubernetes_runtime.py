@@ -42,7 +42,6 @@ from openhands.core.exceptions import (
 from openhands.core.logger import DEBUG
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
-from openhands.integrations.provider import PROVIDER_TOKEN_TYPE
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.runtime.impl.action_execution.action_execution_client import (
     ActionExecutionClient,
@@ -90,7 +89,6 @@ class KubernetesRuntime(ActionExecutionClient):
         attach_to_existing: bool = False,
         headless_mode: bool = True,
         user_id: str | None = None,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
     ):
         if not KubernetesRuntime._shutdown_listener_id:
             KubernetesRuntime._shutdown_listener_id = add_shutdown_listener(

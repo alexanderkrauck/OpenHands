@@ -115,19 +115,10 @@ async def run_controller(
             sid=sid,
             headless_mode=headless_mode,
             agent=agent,
-            git_provider_tokens=repo_tokens,
-        )
-        # Connect to the runtime
-        call_async_from_sync(runtime.connect)
-
         # Initialize repository if needed
         if config.sandbox.selected_repo:
             repo_directory = initialize_repository_for_runtime(
                 runtime,
-                immutable_provider_tokens=repo_tokens,
-                selected_repository=config.sandbox.selected_repo,
-            )
-
     event_stream = runtime.event_stream
 
     # when memory is created, it will load the microagents from the selected repository

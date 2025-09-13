@@ -5,7 +5,7 @@ services:
   openhands:
     build:
       context: .
-      dockerfile: containers/app/Dockerfile
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     volumes:

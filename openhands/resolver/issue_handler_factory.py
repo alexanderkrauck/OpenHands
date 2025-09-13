@@ -1,5 +1,4 @@
 from openhands.core.config import LLMConfig
-from openhands.integrations.provider import ProviderType
 from openhands.resolver.interfaces.bitbucket import (
     BitbucketIssueHandler,
     BitbucketPRHandler,
@@ -19,7 +18,6 @@ class IssueHandlerFactory:
         repo: str,
         token: str,
         username: str,
-        platform: ProviderType,
         base_domain: str,
         issue_type: str,
         llm_config: LLMConfig,
@@ -35,7 +33,6 @@ class IssueHandlerFactory:
 
     def create(self) -> ServiceContextIssue | ServiceContextPR:
         if self.issue_type == 'issue':
-            if self.platform == ProviderType.GITHUB:
                 return ServiceContextIssue(
                     GithubIssueHandler(
                         self.owner,
@@ -46,7 +43,6 @@ class IssueHandlerFactory:
                     ),
                     self.llm_config,
                 )
-            elif self.platform == ProviderType.GITLAB:
                 return ServiceContextIssue(
                     GitlabIssueHandler(
                         self.owner,
@@ -57,7 +53,6 @@ class IssueHandlerFactory:
                     ),
                     self.llm_config,
                 )
-            elif self.platform == ProviderType.BITBUCKET:
                 return ServiceContextIssue(
                     BitbucketIssueHandler(
                         self.owner,
@@ -71,7 +66,6 @@ class IssueHandlerFactory:
             else:
                 raise ValueError(f'Unsupported platform: {self.platform}')
         elif self.issue_type == 'pr':
-            if self.platform == ProviderType.GITHUB:
                 return ServiceContextPR(
                     GithubPRHandler(
                         self.owner,
@@ -82,7 +76,6 @@ class IssueHandlerFactory:
                     ),
                     self.llm_config,
                 )
-            elif self.platform == ProviderType.GITLAB:
                 return ServiceContextPR(
                     GitlabPRHandler(
                         self.owner,
@@ -93,7 +86,6 @@ class IssueHandlerFactory:
                     ),
                     self.llm_config,
                 )
-            elif self.platform == ProviderType.BITBUCKET:
                 return ServiceContextPR(
                     BitbucketPRHandler(
                         self.owner,

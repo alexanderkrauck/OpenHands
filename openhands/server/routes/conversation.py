@@ -12,7 +12,6 @@ from openhands.runtime.base import Runtime
 from openhands.server.dependencies import get_dependencies
 from openhands.server.session.conversation import ServerConversation
 from openhands.server.shared import conversation_manager, file_store
-from openhands.server.user_auth import get_user_id
 from openhands.server.utils import get_conversation, get_conversation_metadata
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
 

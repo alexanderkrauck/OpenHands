@@ -45,7 +45,6 @@ from openhands.events.observation import (
     FileWriteObservation,
     Observation,
 )
-from openhands.integrations.provider import PROVIDER_TOKEN_TYPE
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.runtime.base import Runtime
 from openhands.runtime.plugins import PluginRequirement
@@ -101,7 +100,6 @@ class CLIRuntime(Runtime):
         attach_to_existing (bool, optional): Whether to attach to an existing session. Defaults to False.
         headless_mode (bool, optional): Whether to run in headless mode. Defaults to False.
         user_id (str | None, optional): User ID for authentication. Defaults to None.
-        git_provider_tokens (PROVIDER_TOKEN_TYPE | None, optional): Git provider tokens. Defaults to None.
     """
 
     def __init__(
@@ -116,7 +114,6 @@ class CLIRuntime(Runtime):
         attach_to_existing: bool = False,
         headless_mode: bool = False,
         user_id: str | None = None,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
     ):
         super().__init__(
             config,
@@ -129,7 +126,6 @@ class CLIRuntime(Runtime):
             attach_to_existing,
             headless_mode,
             user_id,
-            git_provider_tokens,
         )
 
         # Set up workspace
@@ -158,6 +154,9 @@ class CLIRuntime(Runtime):
         # Initialize PowerShell session on Windows
         self._is_windows = sys.platform == 'win32'
         self._powershell_session: WindowsPowershellSession | None = None
+        
+        # Initialize MCP clients cache (will be populated on first use)
+        self._cached_mcp_clients: list | None = None
 
         logger.warning(
             'Initializing CLIRuntime. WARNING: NO SANDBOX IS USED. '
@@ -684,6 +683,45 @@ class CLIRuntime(Runtime):
             ),
         )
 
+    async def _get_or_create_mcp_clients(self) -> list:
+        """Get cached MCP clients or create them if they don't exist."""
+        if self._cached_mcp_clients is not None:
+            self.log('info', f'Using cached MCP clients (count: {len(self._cached_mcp_clients)})')
+            return self._cached_mcp_clients
+            
+        # Import here to avoid circular imports
+        from openhands.mcp.utils import create_mcp_clients
+        
+        # Get the MCP config for this runtime
+        mcp_config = self.get_mcp_config()
+
+        if (
+            not mcp_config.sse_servers
+            and not mcp_config.shttp_servers
+            and not mcp_config.stdio_servers
+        ):
+            self.log('warning', 'No MCP servers configured')
+            return []
+
+        self.log(
+            'info',
+            f'Creating NEW MCP clients with servers: '
+            f'SSE={len(mcp_config.sse_servers)}, SHTTP={len(mcp_config.shttp_servers)}, '
+            f'stdio={len(mcp_config.stdio_servers)}',
+        )
+
+        # Create clients with runtime for caching support
+        self._cached_mcp_clients = await create_mcp_clients(
+            mcp_config.sse_servers,
+            mcp_config.shttp_servers,
+            self.sid,
+            mcp_config.stdio_servers,
+            runtime=self,  # Pass runtime for client caching
+        )
+        
+        self.log('debug', f'Created and cached {len(self._cached_mcp_clients)} MCP clients')
+        return self._cached_mcp_clients
+
     async def call_tool_mcp(self, action: MCPAction) -> Observation:
         """Execute an MCP tool action in CLI runtime.
 
@@ -703,31 +741,8 @@ class CLIRuntime(Runtime):
         from openhands.mcp.utils import create_mcp_clients
 
         try:
-            # Get the MCP config for this runtime
-            mcp_config = self.get_mcp_config()
-
-            if (
-                not mcp_config.sse_servers
-                and not mcp_config.shttp_servers
-                and not mcp_config.stdio_servers
-            ):
-                self.log('warning', 'No MCP servers configured')
-                return ErrorObservation('No MCP servers configured')
-
-            self.log(
-                'debug',
-                f'Creating MCP clients for action {action.name} with servers: '
-                f'SSE={len(mcp_config.sse_servers)}, SHTTP={len(mcp_config.shttp_servers)}, '
-                f'stdio={len(mcp_config.stdio_servers)}',
-            )
-
-            # Create clients for this specific operation
-            mcp_clients = await create_mcp_clients(
-                mcp_config.sse_servers,
-                mcp_config.shttp_servers,
-                self.sid,
-                mcp_config.stdio_servers,
-            )
+            # Get or create cached MCP clients
+            mcp_clients = await self._get_or_create_mcp_clients()
 
             if not mcp_clients:
                 self.log('warning', 'No MCP clients could be created')
@@ -884,6 +899,37 @@ class CLIRuntime(Runtime):
             raise RuntimeError(f'Error creating zip file: {str(e)}')
 
     def close(self) -> None:
+        # Clean up MCP clients if they exist
+        if self._cached_mcp_clients:
+            logger.debug('Cleaning up cached MCP clients')
+            # Disconnect all persistent connections
+            import asyncio
+            async def disconnect_all():
+                for client in self._cached_mcp_clients:
+                    try:
+                        if hasattr(client, 'disconnect'):
+                            await client.disconnect()
+                    except Exception as e:
+                        logger.warning(f'Error disconnecting MCP client: {e}')
+            
+            # Run the async disconnect in a new event loop if needed
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Schedule the disconnect as a task
+                    asyncio.create_task(disconnect_all())
+                else:
+                    # Run it directly
+                    loop.run_until_complete(disconnect_all())
+            except RuntimeError:
+                # No event loop, create one
+                asyncio.run(disconnect_all())
+            except Exception as e:
+                logger.warning(f'Error during MCP client cleanup: {e}')
+            
+            # Clear the cache
+            self._cached_mcp_clients = None
+            
         # Clean up PowerShell session if it exists
         if self._powershell_session is not None:
             try:

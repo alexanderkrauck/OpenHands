@@ -8,7 +8,6 @@ from openhands.server.shared import (
     config,
     conversation_manager,
 )
-from openhands.server.user_auth import get_user_id
 from openhands.storage.conversation.conversation_store import ConversationStore
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
 

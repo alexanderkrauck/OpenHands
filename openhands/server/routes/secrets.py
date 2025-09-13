@@ -2,9 +2,6 @@ from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 
 from openhands.core.logger import openhands_logger as logger
-from openhands.integrations.provider import PROVIDER_TOKEN_TYPE, CustomSecret
-from openhands.integrations.service_types import ProviderType
-from openhands.integrations.utils import validate_provider_token
 from openhands.server.dependencies import get_dependencies
 from openhands.server.settings import (
     CustomSecretModel,
@@ -12,7 +9,6 @@ from openhands.server.settings import (
     GETCustomSecrets,
     POSTProviderModel,
 )
-from openhands.server.user_auth import (
     get_provider_tokens,
     get_secrets_store,
     get_user_secrets,
@@ -39,10 +35,6 @@ async def invalidate_legacy_secrets_store(
     """
     if len(settings.secrets_store.provider_tokens.items()) > 0:
         user_secrets = UserSecrets(
-            provider_tokens=settings.secrets_store.provider_tokens
-        )
-        await secrets_store.store(user_secrets)
-
         # Invalidate old tokens via settings store serializer
         invalidated_secrets_settings = settings.model_copy(
             update={'secrets_store': UserSecrets()}
@@ -55,7 +47,6 @@ async def invalidate_legacy_secrets_store(
 
 
 def process_token_validation_result(
-    confirmed_token_type: ProviderType | None, token_type: ProviderType
 ) -> str:
     if not confirmed_token_type or confirmed_token_type != token_type:
         return (
@@ -67,7 +58,6 @@ def process_token_validation_result(
 
 async def check_provider_tokens(
     incoming_provider_tokens: POSTProviderModel,
-    existing_provider_tokens: PROVIDER_TOKEN_TYPE | None,
 ) -> str:
     msg = ''
     if incoming_provider_tokens.provider_tokens:
@@ -104,7 +94,6 @@ async def check_provider_tokens(
 async def store_provider_tokens(
     provider_info: POSTProviderModel,
     secrets_store: SecretsStore = Depends(get_secrets_store),
-    provider_tokens: PROVIDER_TOKEN_TYPE | None = Depends(get_provider_tokens),
 ) -> JSONResponse:
     provider_err_msg = await check_provider_tokens(provider_info, provider_tokens)
     if provider_err_msg:
@@ -130,12 +119,6 @@ async def store_provider_tokens(
                 if provider in existing_providers and not token_value.token:
                     existing_token = user_secrets.provider_tokens.get(provider)
                     if existing_token and existing_token.token:
-                        provider_info.provider_tokens[provider] = existing_token
-
-                provider_info.provider_tokens[provider] = provider_info.provider_tokens[
-                    provider
-                ].model_copy(update={'host': token_value.host})
-
         updated_secrets = user_secrets.model_copy(
             update={'provider_tokens': provider_info.provider_tokens}
         )
@@ -238,11 +221,6 @@ async def create_custom_secret(
         # Create a new UserSecrets that preserves provider tokens
         updated_user_secrets = UserSecrets(
             custom_secrets=custom_secrets,  # type: ignore[arg-type]
-            provider_tokens=existing_secrets.provider_tokens
-            if existing_secrets
-            else {},  # type: ignore[arg-type]
-        )
-
         await secrets_store.store(updated_user_secrets)
 
         return JSONResponse(
@@ -292,9 +270,6 @@ async def update_custom_secret(
 
             updated_secrets = UserSecrets(
                 custom_secrets=custom_secrets,  # type: ignore[arg-type]
-                provider_tokens=existing_secrets.provider_tokens,
-            )
-
             await secrets_store.store(updated_secrets)
 
         return JSONResponse(
@@ -333,9 +308,6 @@ async def delete_custom_secret(
             # Create a new UserSecrets that preserves provider tokens and remaining secrets
             updated_secrets = UserSecrets(
                 custom_secrets=custom_secrets,  # type: ignore[arg-type]
-                provider_tokens=existing_secrets.provider_tokens,
-            )
-
             await secrets_store.store(updated_secrets)
 
         return JSONResponse(

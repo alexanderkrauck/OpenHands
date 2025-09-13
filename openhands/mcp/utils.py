@@ -65,6 +65,7 @@ async def create_mcp_clients(
     shttp_servers: list[MCPSHTTPServerConfig],
     conversation_id: str | None = None,
     stdio_servers: list[MCPStdioServerConfig] | None = None,
+    runtime: Runtime | None = None,
 ) -> list[MCPClient]:
     import sys
 
@@ -99,51 +100,84 @@ async def create_mcp_clients(
                 )
                 continue
 
-            logger.info(f'Initializing MCP agent for {server} with stdio connection...')
-            client = MCPClient()
-            try:
-                await client.connect_stdio(server)
+            server_key = f"stdio:{server.name}"
+            
+            # Try to get cached client from runtime if available
+            if runtime and hasattr(runtime, 'get_or_create_mcp_client'):
+                async def create_stdio_client():
+                    client = MCPClient(persistent_connection=server.persistent_connection)
+                    await client.connect_stdio(server, timeout=server.connection_timeout)
+                    return client
+                
+                try:
+                    client = await runtime.get_or_create_mcp_client(server_key, create_stdio_client)
+                    mcp_clients.append(client)
+                    logger.debug(f'Using MCP stdio server {server.name} from cache/created')
+                except Exception as e:
+                    logger.error(f'Failed to connect to {server}: {str(e)}', exc_info=True)
+            else:
+                # Fallback to creating new client without caching
+                logger.info(f'Initializing MCP agent for {server} with stdio connection...')
+                client = MCPClient(persistent_connection=False)  # Non-persistent for backward compat
+                try:
+                    await client.connect_stdio(server)
 
-                # Log which tools this specific server provides
-                tool_names = [tool.name for tool in client.tools]
-                server_name = getattr(
-                    server, 'name', f'{server.command} {" ".join(server.args or [])}'
-                )
-                logger.debug(
-                    f'Successfully connected to MCP stdio server {server_name} - '
-                    f'provides {len(tool_names)} tools: {tool_names}'
-                )
+                    # Log which tools this specific server provides
+                    tool_names = [tool.name for tool in client.tools]
+                    server_name = getattr(
+                        server, 'name', f'{server.command} {" ".join(server.args or [])}'
+                    )
+                    logger.debug(
+                        f'Successfully connected to MCP stdio server {server_name} - '
+                        f'provides {len(tool_names)} tools: {tool_names}'
+                    )
 
-                mcp_clients.append(client)
-            except Exception as e:
-                # Error is already logged and collected in client.connect_stdio()
-                logger.error(f'Failed to connect to {server}: {str(e)}', exc_info=True)
+                    mcp_clients.append(client)
+                except Exception as e:
+                    # Error is already logged and collected in client.connect_stdio()
+                    logger.error(f'Failed to connect to {server}: {str(e)}', exc_info=True)
             continue
 
         is_shttp = isinstance(server, MCPSHTTPServerConfig)
+        server_key = f"{'shttp' if is_shttp else 'sse'}:{server.url}"
 
-        connection_type = 'SHTTP' if is_shttp else 'SSE'
-        logger.info(
-            f'Initializing MCP agent for {server} with {connection_type} connection...'
-        )
-        client = MCPClient()
-
-        try:
-            await client.connect_http(server, conversation_id=conversation_id)
-
-            # Log which tools this specific server provides
-            tool_names = [tool.name for tool in client.tools]
-            logger.debug(
-                f'Successfully connected to MCP STTP server {server.url} - '
-                f'provides {len(tool_names)} tools: {tool_names}'
+        # Try to get cached client from runtime if available
+        if runtime and hasattr(runtime, 'get_or_create_mcp_client'):
+            async def create_http_client():
+                client = MCPClient(persistent_connection=server.persistent_connection)
+                await client.connect_http(server, conversation_id=conversation_id, timeout=server.connection_timeout)
+                return client
+            
+            try:
+                client = await runtime.get_or_create_mcp_client(server_key, create_http_client)
+                mcp_clients.append(client)
+                logger.debug(f'Using MCP {"SHTTP" if is_shttp else "SSE"} server {server.url} from cache/created')
+            except Exception as e:
+                logger.error(f'Failed to connect to {server}: {str(e)}', exc_info=True)
+        else:
+            # Fallback to creating new client without caching
+            connection_type = 'SHTTP' if is_shttp else 'SSE'
+            logger.info(
+                f'Initializing MCP agent for {server} with {connection_type} connection...'
             )
+            client = MCPClient(persistent_connection=False)  # Non-persistent for backward compat
 
-            # Only add the client to the list after a successful connection
-            mcp_clients.append(client)
+            try:
+                await client.connect_http(server, conversation_id=conversation_id)
 
-        except Exception as e:
-            # Error is already logged and collected in client.connect_http()
-            logger.error(f'Failed to connect to {server}: {str(e)}', exc_info=True)
+                # Log which tools this specific server provides
+                tool_names = [tool.name for tool in client.tools]
+                logger.debug(
+                    f'Successfully connected to MCP {"SHTTP" if is_shttp else "SSE"} server {server.url} - '
+                    f'provides {len(tool_names)} tools: {tool_names}'
+                )
+
+                # Only add the client to the list after a successful connection
+                mcp_clients.append(client)
+
+            except Exception as e:
+                # Error is already logged and collected in client.connect_http()
+                logger.error(f'Failed to connect to {server}: {str(e)}', exc_info=True)
 
     return mcp_clients
 

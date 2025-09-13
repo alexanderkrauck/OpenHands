@@ -11,11 +11,8 @@ from openhands.core.logger import get_console_handler
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action import Action
 from openhands.events.action.message import MessageAction
-from openhands.integrations.service_types import ProviderType
-from openhands.integrations.utils import validate_provider_token
 
 
-async def identify_token(token: str, base_domain: str | None) -> ProviderType:
     """Identifies whether a token belongs to GitHub, GitLab, or Bitbucket.
     Parameters:
         token (str): The personal access token to check.

@@ -49,10 +49,14 @@ class MCPSSEServerConfig(BaseModel):
     Attributes:
         url: The server URL
         api_key: Optional API key for authentication
+        persistent_connection: Whether to maintain a persistent connection
+        connection_timeout: Connection timeout in seconds
     """
 
     url: str
     api_key: str | None = None
+    persistent_connection: bool = True
+    connection_timeout: int = 30
 
     @field_validator('url')
     @classmethod
@@ -69,12 +73,16 @@ class MCPStdioServerConfig(BaseModel):
         command: The command to run the server
         args: The arguments to pass to the server
         env: The environment variables to set for the server
+        persistent_connection: Whether to maintain a persistent connection
+        connection_timeout: Connection timeout in seconds
     """
 
     name: str
     command: str
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
+    persistent_connection: bool = True
+    connection_timeout: int = 30
 
     @field_validator('name', mode='before')
     @classmethod
@@ -189,8 +197,19 @@ class MCPStdioServerConfig(BaseModel):
 
 
 class MCPSHTTPServerConfig(BaseModel):
+    """Configuration for a MCP SHTTP server.
+
+    Attributes:
+        url: The server URL
+        api_key: Optional API key for authentication
+        persistent_connection: Whether to maintain a persistent connection
+        connection_timeout: Connection timeout in seconds
+    """
+    
     url: str
     api_key: str | None = None
+    persistent_connection: bool = True
+    connection_timeout: int = 30
 
     @field_validator('url', mode='before')
     @classmethod

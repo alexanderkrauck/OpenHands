@@ -42,7 +42,6 @@ from openhands.events.observation import (
 )
 from openhands.events.serialization import event_to_dict, observation_from_dict
 from openhands.events.serialization.action import ACTION_TYPE_TO_CLASS
-from openhands.integrations.provider import PROVIDER_TOKEN_TYPE
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.runtime.base import Runtime
 from openhands.runtime.plugins import PluginRequirement
@@ -77,7 +76,6 @@ class ActionExecutionClient(Runtime):
         attach_to_existing: bool = False,
         headless_mode: bool = True,
         user_id: str | None = None,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
     ):
         self.session = HttpSession()
         self.action_semaphore = threading.Semaphore(1)  # Ensure one action at a time
@@ -470,9 +468,13 @@ class ActionExecutionClient(Runtime):
             f'Creating MCP clients with servers: {updated_mcp_config.sse_servers}',
         )
 
-        # Create clients for this specific operation
+        # Create clients with runtime for caching support
         mcp_clients = await create_mcp_clients(
-            updated_mcp_config.sse_servers, updated_mcp_config.shttp_servers, self.sid
+            updated_mcp_config.sse_servers, 
+            updated_mcp_config.shttp_servers, 
+            self.sid,
+            stdio_servers=None,  # No stdio servers for action execution client
+            runtime=self,  # Pass runtime for client caching
         )
 
         # Call the tool and return the result

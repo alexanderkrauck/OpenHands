@@ -9,7 +9,6 @@ from pydantic import SecretStr
 
 from openhands.core.config import LLMConfig
 from openhands.core.logger import openhands_logger as logger
-from openhands.integrations.service_types import ProviderType
 from openhands.llm.llm import LLM
 from openhands.resolver.interfaces.bitbucket import BitbucketIssueHandler
 from openhands.resolver.interfaces.github import GithubIssueHandler
@@ -234,7 +233,6 @@ def send_pull_request(
     issue: Issue,
     token: str,
     username: str | None,
-    platform: ProviderType,
     patch_dir: str,
     pr_type: str,
     fork_owner: str | None = None,
@@ -267,26 +265,20 @@ def send_pull_request(
 
     # Determine default base_domain based on platform
     if base_domain is None:
-        if platform == ProviderType.GITHUB:
             base_domain = 'github.com'
-        elif platform == ProviderType.GITLAB:
             base_domain = 'gitlab.com'
-        else:  # platform == ProviderType.BITBUCKET
             base_domain = 'bitbucket.org'
 
     # Create the appropriate handler based on platform
     handler = None
-    if platform == ProviderType.GITHUB:
         handler = ServiceContextIssue(
             GithubIssueHandler(issue.owner, issue.repo, token, username, base_domain),
             None,
         )
-    elif platform == ProviderType.GITLAB:
         handler = ServiceContextIssue(
             GitlabIssueHandler(issue.owner, issue.repo, token, username, base_domain),
             None,
         )
-    elif platform == ProviderType.BITBUCKET:
         handler = ServiceContextIssue(
             BitbucketIssueHandler(
                 issue.owner, issue.repo, token, username, base_domain
@@ -353,7 +345,6 @@ def send_pull_request(
 
     # For cross repo pull request, we need to send head parameter like fork_owner:branch as per git documentation here : https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#create-a-pull-request
     # head parameter usage : The name of the branch where your changes are implemented. For cross-repository pull requests in the same network, namespace head with a user like this: username:branch.
-    if fork_owner and platform == ProviderType.GITHUB:
         head_branch = f'{fork_owner}:{branch_name}'
     else:
         head_branch = branch_name
@@ -365,12 +356,9 @@ def send_pull_request(
         # Prepare the PR for the GitHub API
         data = {
             'title': final_pr_title,
-            ('body' if platform == ProviderType.GITHUB else 'description'): pr_body,
             (
-                'head' if platform == ProviderType.GITHUB else 'source_branch'
             ): head_branch,
             (
-                'base' if platform == ProviderType.GITHUB else 'target_branch'
             ): base_branch,
             'draft': pr_type == 'draft',
         }
@@ -394,7 +382,6 @@ def update_existing_pull_request(
     issue: Issue,
     token: str,
     username: str | None,
-    platform: ProviderType,
     patch_dir: str,
     llm_config: LLMConfig,
     comment_message: str | None = None,
@@ -418,10 +405,8 @@ def update_existing_pull_request(
 
     # Determine default base_domain based on platform
     if base_domain is None:
-        base_domain = 'github.com' if platform == ProviderType.GITHUB else 'gitlab.com'
 
     handler = None
-    if platform == ProviderType.GITHUB:
         handler = ServiceContextIssue(
             GithubIssueHandler(issue.owner, issue.repo, token, username, base_domain),
             llm_config,
@@ -504,7 +489,6 @@ def process_single_issue(
     resolver_output: ResolverOutput,
     token: str,
     username: str,
-    platform: ProviderType,
     pr_type: str,
     llm_config: LLMConfig,
     fork_owner: str | None,
@@ -518,7 +502,6 @@ def process_single_issue(
 ) -> None:
     # Determine default base_domain based on platform
     if base_domain is None:
-        base_domain = 'github.com' if platform == ProviderType.GITHUB else 'gitlab.com'
     if not resolver_output.success and not send_on_failure:
         logger.info(
             f'Issue {resolver_output.issue.number} was not successfully resolved. Skipping PR creation.'

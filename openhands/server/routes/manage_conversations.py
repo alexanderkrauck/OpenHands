@@ -23,15 +23,6 @@ from openhands.events.observation import (
     NullObservation,
 )
 from openhands.experiments.experiment_manager import ExperimentConfig
-from openhands.integrations.provider import (
-    PROVIDER_TOKEN_TYPE,
-    ProviderHandler,
-)
-from openhands.integrations.service_types import (
-    CreateMicroagent,
-    ProviderType,
-    SuggestedTask,
-)
 from openhands.runtime import get_runtime_cls
 from openhands.runtime.runtime_status import RuntimeStatus
 from openhands.server.data_models.agent_loop_info import AgentLoopInfo
@@ -50,8 +41,6 @@ from openhands.server.shared import (
     conversation_manager,
     file_store,
 )
-from openhands.server.types import LLMAuthenticationError, MissingSettingsError
-from openhands.server.user_auth import (
     get_auth_type,
     get_provider_tokens,
     get_user_id,
@@ -59,7 +48,6 @@ from openhands.server.user_auth import (
     get_user_settings,
     get_user_settings_store,
 )
-from openhands.server.user_auth.user_auth import AuthType
 from openhands.server.utils import get_conversation as get_conversation_metadata
 from openhands.server.utils import get_conversation_store, validate_conversation_id
 from openhands.storage.conversation.conversation_store import ConversationStore
@@ -69,7 +57,6 @@ from openhands.storage.data_models.conversation_metadata import (
 )
 from openhands.storage.data_models.conversation_status import ConversationStatus
 from openhands.storage.data_models.settings import Settings
-from openhands.storage.data_models.user_secrets import UserSecrets
 from openhands.storage.locations import get_experiment_config_filename
 from openhands.storage.settings.settings_store import SettingsStore
 from openhands.utils.async_utils import wait_all
@@ -159,13 +146,10 @@ async def _build_conversation_result_set(
 
 class InitSessionRequest(BaseModel):
     repository: str | None = None
-    git_provider: ProviderType | None = None
     selected_branch: str | None = None
     initial_user_msg: str | None = None
     image_urls: list[str] | None = None
     replay_json: str | None = None
-    suggested_task: SuggestedTask | None = None
-    create_microagent: CreateMicroagent | None = None
     conversation_instructions: str | None = None
     mcp_config: MCPConfig | None = None
     # Only nested runtimes require the ability to specify a conversation id, and it could be a security risk
@@ -183,15 +167,12 @@ class ConversationResponse(BaseModel):
 
 
 class ProvidersSetModel(BaseModel):
-    providers_set: list[ProviderType] | None = None
 
 
 @app.post('/conversations')
 async def new_conversation(
     data: InitSessionRequest,
     user_id: str = Depends(get_user_id),
-    provider_tokens: PROVIDER_TOKEN_TYPE = Depends(get_provider_tokens),
-    user_secrets: UserSecrets = Depends(get_user_secrets),
     auth_type: AuthType | None = Depends(get_auth_type),
 ) -> ConversationResponse:
     """Initialize a new session or join an existing one.
@@ -241,27 +222,11 @@ async def new_conversation(
 
     try:
         if repository:
-            provider_handler = ProviderHandler(provider_tokens)
             # Check against git_provider, otherwise check all provider apis
-            await provider_handler.verify_repo_provider(repository, git_provider)
 
         conversation_id = getattr(data, 'conversation_id', None) or uuid.uuid4().hex
         agent_loop_info = await create_new_conversation(
             user_id=user_id,
-            git_provider_tokens=provider_tokens,
-            custom_secrets=user_secrets.custom_secrets if user_secrets else None,
-            selected_repository=repository,
-            selected_branch=selected_branch,
-            initial_user_msg=initial_user_msg,
-            image_urls=image_urls,
-            replay_json=replay_json,
-            conversation_trigger=conversation_trigger,
-            conversation_instructions=conversation_instructions,
-            git_provider=git_provider,
-            conversation_id=conversation_id,
-            mcp_config=data.mcp_config,
-        )
-
         return ConversationResponse(
             status='ok',
             conversation_id=conversation_id,
@@ -277,7 +242,6 @@ async def new_conversation(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    except LLMAuthenticationError as e:
         return JSONResponse(
             content={
                 'status': 'error',
@@ -672,7 +636,6 @@ async def update_conversation(
         # Validate that the user owns this conversation
         if user_id and metadata.user_id != user_id:
             logger.warning(
-                f'User {user_id} attempted to update conversation {conversation_id} owned by {metadata.user_id}',
                 extra={'session_id': conversation_id, 'user_id': user_id},
             )
             return JSONResponse(
@@ -776,7 +739,6 @@ async def get_microagent_management_conversations(
     page_id: str | None = None,
     limit: int = 20,
     conversation_store: ConversationStore = Depends(get_conversation_store),
-    provider_tokens: PROVIDER_TOKEN_TYPE = Depends(get_provider_tokens),
 ) -> ConversationInfoResultSet:
     """Get conversations for the microagent management page with pagination support.
 
@@ -798,7 +760,6 @@ async def get_microagent_management_conversations(
     )
 
     # Check if the last PR is active (not closed/merged)
-    provider_handler = ProviderHandler(provider_tokens)
 
     # Apply additional filters
     final_filtered_results = []
@@ -816,7 +777,6 @@ async def get_microagent_management_conversations(
             and len(conversation.pr_number) > 0
             and conversation.selected_repository
             and conversation.git_provider
-            and not await provider_handler.is_pr_open(
                 conversation.selected_repository,
                 conversation.pr_number[-1],  # Get the last PR number
                 conversation.git_provider,

@@ -25,7 +25,7 @@ include = [
 
 [tool.poetry.dependencies]
 python = "^3.12,<3.14"
-litellm = "^1.74.3, !=1.64.4, !=1.67.*"            # avoid 1.64.4 (known bug) & 1.67.* (known bug #10272)
+litellm = "^1.77.0, !=1.64.4, !=1.67.*"            # avoid 1.64.4 (known bug) & 1.67.* (known bug #10272)
 openai = "1.99.9"                                  # Pin due to litellm incompatibility with >=1.100.0 (BerriAI/litellm#13711)
 aiohttp = ">=3.9.0,!=3.11.13"                      # Pin to avoid yanked version 3.11.13
 google-genai = "*"                                 # To use litellm with Gemini Pro API
@@ -71,7 +71,7 @@ prompt-toolkit = "^3.0.50"
 poetry = "^2.1.2"
 anyio = "4.9.0"
 pythonnet = "*"
-fastmcp = "^2.5.2"
+fastmcp = "^2.12.3"
 python-frontmatter = "^1.1.0"
 shellingham = "^1.5.4"
 # TODO: Should these go into the runtime group?

@@ -5,13 +5,6 @@ from typing import Any
 from openhands.core.config.mcp_config import MCPConfig
 from openhands.core.logger import openhands_logger as logger
 from openhands.events.action.message import MessageAction
-from openhands.experiments.experiment_manager import ExperimentManagerImpl
-from openhands.integrations.provider import (
-    CUSTOM_SECRETS_TYPE_WITH_JSON_SCHEMA,
-    PROVIDER_TOKEN_TYPE,
-    ProviderToken,
-)
-from openhands.integrations.service_types import ProviderType
 from openhands.server.data_models.agent_loop_info import AgentLoopInfo
 from openhands.server.session.conversation_init_data import ConversationInitData
 from openhands.server.shared import (
@@ -37,7 +30,7 @@ async def initialize_conversation(
     selected_repository: str | None,
     selected_branch: str | None,
     conversation_trigger: ConversationTrigger = ConversationTrigger.GUI,
-    git_provider: ProviderType | None = None,
+    git_provider = None,
 ) -> ConversationMetadata | None:
     if conversation_id is None:
         conversation_id = uuid.uuid4().hex
@@ -77,29 +70,6 @@ async def initialize_conversation(
 
 async def start_conversation(
     user_id: str | None,
-    git_provider_tokens: PROVIDER_TOKEN_TYPE | None,
-    custom_secrets: CUSTOM_SECRETS_TYPE_WITH_JSON_SCHEMA | None,
-    initial_user_msg: str | None,
-    image_urls: list[str] | None,
-    replay_json: str | None,
-    conversation_id: str,
-    conversation_metadata: ConversationMetadata,
-    conversation_instructions: str | None,
-    mcp_config: MCPConfig | None = None,
-) -> AgentLoopInfo:
-    logger.info(
-        'Creating conversation',
-        extra={
-            'signal': 'create_conversation',
-            'user_id': user_id,
-            'trigger': conversation_metadata.trigger,
-        },
-    )
-    logger.info('Loading settings')
-    settings_store = await SettingsStoreImpl.get_instance(config, user_id)
-    settings = await settings_store.load()
-    logger.info('Settings loaded')
-
     session_init_args: dict[str, Any] = {}
     if settings:
         session_init_args = {**settings.__dict__, **session_init_args}
@@ -123,20 +93,8 @@ async def start_conversation(
         logger.warning('Settings not present, not starting conversation')
         raise MissingSettingsError('Settings not found')
 
-    session_init_args['git_provider_tokens'] = git_provider_tokens
-    session_init_args['selected_repository'] = conversation_metadata.selected_repository
-    session_init_args['custom_secrets'] = custom_secrets
-    session_init_args['selected_branch'] = conversation_metadata.selected_branch
-    session_init_args['git_provider'] = conversation_metadata.git_provider
-    session_init_args['conversation_instructions'] = conversation_instructions
-    if mcp_config:
-        session_init_args['mcp_config'] = mcp_config
-
     conversation_init_data = ConversationInitData(**session_init_args)
 
-    conversation_init_data = ExperimentManagerImpl.run_conversation_variant_test(
-        user_id, conversation_id, conversation_init_data
-    )
 
     logger.info(
         f'Starting agent loop for conversation {conversation_id}',
@@ -163,28 +121,6 @@ async def start_conversation(
 
 async def create_new_conversation(
     user_id: str | None,
-    git_provider_tokens: PROVIDER_TOKEN_TYPE | None,
-    custom_secrets: CUSTOM_SECRETS_TYPE_WITH_JSON_SCHEMA | None,
-    selected_repository: str | None,
-    selected_branch: str | None,
-    initial_user_msg: str | None,
-    image_urls: list[str] | None,
-    replay_json: str | None,
-    conversation_instructions: str | None = None,
-    conversation_trigger: ConversationTrigger = ConversationTrigger.GUI,
-    git_provider: ProviderType | None = None,
-    conversation_id: str | None = None,
-    mcp_config: MCPConfig | None = None,
-) -> AgentLoopInfo:
-    conversation_metadata = await initialize_conversation(
-        user_id,
-        conversation_id,
-        selected_repository,
-        selected_branch,
-        conversation_trigger,
-        git_provider,
-    )
-
     if not conversation_metadata:
         raise Exception('Failed to initialize conversation')
 
@@ -202,20 +138,13 @@ async def create_new_conversation(
     )
 
 
-def create_provider_tokens_object(
-    providers_set: list[ProviderType],
-) -> PROVIDER_TOKEN_TYPE:
+def create_provider_tokens_object(providers_set):
     """Create provider tokens object for the given providers."""
-    provider_information: dict[ProviderType, ProviderToken] = {}
-
-    for provider in providers_set:
-        provider_information[provider] = ProviderToken(token=None, user_id=None)
-
-    return MappingProxyType(provider_information)
+    return {}
 
 
 async def setup_init_conversation_settings(
-    user_id: str | None, conversation_id: str, providers_set: list[ProviderType]
+    user_id: str | None, conversation_id: str, providers_set
 ) -> ConversationInitData:
     """Set up conversation initialization data with provider tokens.
 
@@ -243,18 +172,7 @@ async def setup_init_conversation_settings(
     session_init_args: dict = {}
     session_init_args = {**settings.__dict__, **session_init_args}
 
-    git_provider_tokens = create_provider_tokens_object(providers_set)
-    logger.info(f'Git provider scaffold: {git_provider_tokens}')
-
     if server_config.app_mode != AppMode.SAAS and user_secrets:
-        git_provider_tokens = user_secrets.provider_tokens
-
-    session_init_args['git_provider_tokens'] = git_provider_tokens
-    if user_secrets:
-        session_init_args['custom_secrets'] = user_secrets.custom_secrets
-
     conversation_init_data = ConversationInitData(**session_init_args)
     # We should recreate the same experiment conditions when restarting a conversation
-    return ExperimentManagerImpl.run_conversation_variant_test(
-        user_id, conversation_id, conversation_init_data
-    )
+    return conversation_init_data

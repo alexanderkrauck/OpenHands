@@ -18,7 +18,6 @@ from openhands.core.exceptions import (
 )
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
-from openhands.integrations.provider import PROVIDER_TOKEN_TYPE
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.runtime.builder.remote import RemoteRuntimeBuilder
 from openhands.runtime.impl.action_execution.action_execution_client import (
@@ -60,7 +59,6 @@ class RemoteRuntime(ActionExecutionClient):
         attach_to_existing: bool = False,
         headless_mode: bool = True,
         user_id: str | None = None,
-        git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
         main_module: str = DEFAULT_MAIN_MODULE,
     ) -> None:
         super().__init__(

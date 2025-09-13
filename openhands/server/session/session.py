@@ -101,12 +101,6 @@ class WebSession:
         )
         self.config = config
 
-        # Lazy import to avoid circular dependency
-        from openhands.experiments.experiment_manager import ExperimentManagerImpl
-
-        self.config = ExperimentManagerImpl.run_config_variant_test(
-            user_id, sid, self.config
-        )
         self.loop = asyncio.get_event_loop()
         self.user_id = user_id
 
@@ -249,18 +243,6 @@ class WebSession:
 
         self.llm_registry.retry_listner = self._notify_on_llm_retry
 
-        git_provider_tokens = None
-        selected_repository = None
-        selected_branch = None
-        custom_secrets = None
-        conversation_instructions = None
-        if isinstance(settings, ConversationInitData):
-            git_provider_tokens = settings.git_provider_tokens
-            selected_repository = settings.selected_repository
-            selected_branch = settings.selected_branch
-            custom_secrets = settings.custom_secrets
-            conversation_instructions = settings.conversation_instructions
-
         try:
             await self.agent_session.start(
                 runtime_name=self.config.runtime,
@@ -270,39 +252,6 @@ class WebSession:
                 max_budget_per_task=max_budget_per_task,
                 agent_to_llm_config=self.config.get_agent_to_llm_config_map(),
                 agent_configs=self.config.get_agent_configs(),
-                git_provider_tokens=git_provider_tokens,
-                custom_secrets=custom_secrets,
-                selected_repository=selected_repository,
-                selected_branch=selected_branch,
-                initial_message=initial_message,
-                conversation_instructions=conversation_instructions,
-                replay_json=replay_json,
-            )
-        except MicroagentValidationError as e:
-            self.logger.exception(f'Error creating agent_session: {e}')
-            # For microagent validation errors, provide more helpful information
-            await self.send_error(f'Failed to create agent session: {str(e)}')
-            return
-        except ValueError as e:
-            self.logger.exception(f'Error creating agent_session: {e}')
-            error_message = str(e)
-            # For ValueError related to microagents, provide more helpful information
-            if 'microagent' in error_message.lower():
-                await self.send_error(
-                    f'Failed to create agent session: {error_message}'
-                )
-            else:
-                # For other ValueErrors, just show the error class
-                await self.send_error('Failed to create agent session: ValueError')
-            return
-        except Exception as e:
-            self.logger.exception(f'Error creating agent_session: {e}')
-            # For other errors, just show the error class to avoid exposing sensitive information
-            await self.send_error(
-                f'Failed to create agent session: {e.__class__.__name__}'
-            )
-            return
-
     def _notify_on_llm_retry(self, retries: int, max: int) -> None:
         self.queue_status_message(
             'info', RuntimeStatus.LLM_RETRY, f'Retrying LLM request, {retries} / {max}'

@@ -8,15 +8,9 @@ from fastmcp.server.dependencies import get_http_request
 from pydantic import Field
 
 from openhands.core.logger import openhands_logger as logger
-from openhands.integrations.bitbucket.bitbucket_service import BitBucketServiceImpl
-from openhands.integrations.github.github_service import GithubServiceImpl
-from openhands.integrations.gitlab.gitlab_service import GitLabServiceImpl
-from openhands.integrations.provider import ProviderToken
-from openhands.integrations.service_types import GitService, ProviderType
 from openhands.server.dependencies import get_dependencies
 from openhands.server.shared import ConversationStoreImpl, config, server_config
 from openhands.server.types import AppMode
-from openhands.server.user_auth import (
     get_access_token,
     get_provider_tokens,
     get_user_id,
@@ -43,7 +37,6 @@ async def get_conversation_link(
     conversation_url = CONVERSATION_URL.format(conversation_id)
     conversation_link = (
         f'@{username} can click here to [continue refining the PR]({conversation_url})'
-    )
     body += f'\n\n{conversation_link}'
     return body
 
@@ -54,7 +47,6 @@ async def save_pr_metadata(
     conversation_store = await ConversationStoreImpl.get_instance(config, user_id)
     conversation: ConversationMetadata = await conversation_store.get_metadata(
         conversation_id
-    )
 
     pull_pattern = r'pull/(\d+)'
     merge_request_pattern = r'merge_requests/(\d+)'
@@ -104,15 +96,10 @@ async def create_pr(
     headers = request.headers
     conversation_id = headers.get('X-OpenHands-ServerConversation-ID', None)
 
-    provider_tokens = await get_provider_tokens(request)
-    access_token = await get_access_token(request)
-    user_id = await get_user_id(request)
-
     github_token = (
         provider_tokens.get(ProviderType.GITHUB, ProviderToken())
         if provider_tokens
         else ProviderToken()
-    )
 
     github_service = GithubServiceImpl(
         user_id=github_token.user_id,
@@ -120,7 +107,6 @@ async def create_pr(
         external_auth_token=access_token,
         token=github_token.token,
         base_domain=github_token.host,
-    )
 
     try:
         body = await get_conversation_link(github_service, conversation_id, body or '')
@@ -177,15 +163,10 @@ async def create_mr(
     headers = request.headers
     conversation_id = headers.get('X-OpenHands-ServerConversation-ID', None)
 
-    provider_tokens = await get_provider_tokens(request)
-    access_token = await get_access_token(request)
-    user_id = await get_user_id(request)
-
     github_token = (
         provider_tokens.get(ProviderType.GITLAB, ProviderToken())
         if provider_tokens
         else ProviderToken()
-    )
 
     gitlab_service = GitLabServiceImpl(
         user_id=github_token.user_id,
@@ -193,7 +174,6 @@ async def create_mr(
         external_auth_token=access_token,
         token=github_token.token,
         base_domain=github_token.host,
-    )
 
     try:
         description = await get_conversation_link(
@@ -244,15 +224,10 @@ async def create_bitbucket_pr(
     headers = request.headers
     conversation_id = headers.get('X-OpenHands-ServerConversation-ID', None)
 
-    provider_tokens = await get_provider_tokens(request)
-    access_token = await get_access_token(request)
-    user_id = await get_user_id(request)
-
     bitbucket_token = (
         provider_tokens.get(ProviderType.BITBUCKET, ProviderToken())
         if provider_tokens
         else ProviderToken()
-    )
 
     bitbucket_service = BitBucketServiceImpl(
         user_id=bitbucket_token.user_id,
@@ -260,7 +235,6 @@ async def create_bitbucket_pr(
         external_auth_token=access_token,
         token=bitbucket_token.token,
         base_domain=bitbucket_token.host,
-    )
 
     try:
         description = await get_conversation_link(

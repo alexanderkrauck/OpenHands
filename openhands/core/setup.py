@@ -16,11 +16,6 @@ from openhands.core.config.config_utils import DEFAULT_WORKSPACE_MOUNT_PATH_IN_S
 from openhands.core.logger import openhands_logger as logger
 from openhands.events import EventStream
 from openhands.events.event import Event
-from openhands.integrations.provider import (
-    PROVIDER_TOKEN_TYPE,
-    ProviderToken,
-    ProviderType,
-)
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.memory.memory import Memory
 from openhands.microagent.microagent import BaseMicroagent
@@ -38,7 +33,6 @@ def create_runtime(
     sid: str | None = None,
     headless_mode: bool = True,
     agent: Agent | None = None,
-    git_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
 ) -> Runtime:
     """Create a runtime for the agent to run on.
 
@@ -78,9 +72,7 @@ def create_runtime(
         plugins=agent_cls.sandbox_plugins,
         headless_mode=headless_mode,
         llm_registry=llm_registry or LLMRegistry(config),
-        git_provider_tokens=git_provider_tokens,
     )
-
     # Log the plugins that have been registered with the runtime for debugging purposes
     logger.debug(
         f'Runtime created with plugins: {[plugin.name for plugin in runtime.plugins]}'
@@ -93,32 +85,20 @@ def get_provider_tokens():
     """Retrieve provider tokens from environment variables and return them as a dictionary.
 
     Returns:
-        A dictionary mapping ProviderType to ProviderToken if tokens are found, otherwise None.
     """
     # Collect provider tokens from environment variables if available
-    provider_tokens = {}
-    if 'GITHUB_TOKEN' in os.environ:
-        github_token = SecretStr(os.environ['GITHUB_TOKEN'])
-        provider_tokens[ProviderType.GITHUB] = ProviderToken(token=github_token)
-
     if 'GITLAB_TOKEN' in os.environ:
         gitlab_token = SecretStr(os.environ['GITLAB_TOKEN'])
-        provider_tokens[ProviderType.GITLAB] = ProviderToken(token=gitlab_token)
 
     if 'BITBUCKET_TOKEN' in os.environ:
         bitbucket_token = SecretStr(os.environ['BITBUCKET_TOKEN'])
-        provider_tokens[ProviderType.BITBUCKET] = ProviderToken(token=bitbucket_token)
 
     # Wrap provider tokens in UserSecrets if any tokens were found
-    secret_store = (
-        UserSecrets(provider_tokens=provider_tokens) if provider_tokens else None  # type: ignore[arg-type]
-    )
-    return secret_store.provider_tokens if secret_store else None
-
+    secret_store = None
+    return secret_store
 
 def initialize_repository_for_runtime(
     runtime: Runtime,
-    immutable_provider_tokens: PROVIDER_TOKEN_TYPE | None = None,
     selected_repository: str | None = None,
 ) -> str | None:
     """Initialize the repository for the runtime by cloning or initializing it,
@@ -134,8 +114,7 @@ def initialize_repository_for_runtime(
     """
     # If provider tokens are not provided, attempt to retrieve them from the environment
     if not immutable_provider_tokens:
-        immutable_provider_tokens = get_provider_tokens()
-
+        pass
     logger.debug(f'Selected repository {selected_repository}.')
 
     # Clone or initialize the repository using the runtime
@@ -238,7 +217,6 @@ def create_controller(
         headless_mode=headless_mode,
         confirmation_mode=config.security.confirmation_mode,
         replay_events=replay_events,
-        security_analyzer=runtime.security_analyzer,
     )
     return (controller, initial_state)
 
