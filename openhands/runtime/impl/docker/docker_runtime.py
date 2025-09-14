@@ -301,21 +301,7 @@ class DockerRuntime(ActionExecutionClient):
                     )
 
         # Legacy mounting with workspace_* parameters
-        elif (
-            self.config.workspace_mount_path is not None
-            and self.config.workspace_mount_path_in_sandbox is not None
-        ):
-            mount_mode = 'rw'  # Default mode
-
-            # e.g. result would be: {"/home/user/openhands/workspace": {'bind': "/workspace", 'mode': 'rw'}}
-            # Add os.path.abspath() here so that relative paths can be used when workspace_mount_path is configured in config.toml
-            volumes[os.path.abspath(self.config.workspace_mount_path)] = {
-                'bind': self.config.workspace_mount_path_in_sandbox,
-                'mode': mount_mode,
-            }
-            logger.debug(
-                f'Mount dir (legacy): {self.config.workspace_mount_path} with mode: {mount_mode}'
-            )
+        # Legacy workspace mount handling removed - use SANDBOX_VOLUMES instead
 
         return volumes
 
@@ -472,7 +458,7 @@ class DockerRuntime(ActionExecutionClient):
         # also update with runtime_startup_env_vars
         environment.update(self.config.sandbox.runtime_startup_env_vars)
 
-        self.log('debug', f'Workspace Base: {self.config.workspace_base}')
+        self.log('debug', 'Workspace setup via SANDBOX_VOLUMES')
 
         # Process volumes for mounting
         volumes = self._process_volumes()

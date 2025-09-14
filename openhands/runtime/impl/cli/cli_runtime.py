@@ -128,20 +128,12 @@ class CLIRuntime(Runtime):
             user_id,
         )
 
-        # Set up workspace
-        if self.config.workspace_base is not None:
-            logger.warning(
-                f'Workspace base path is set to {self.config.workspace_base}. '
-                'It will be used as the path for the agent to run in. '
-                'Be careful, the agent can EDIT files in this directory!'
-            )
-            self._workspace_path = self.config.workspace_base
-        else:
-            # Create a temporary directory for the workspace
-            self._workspace_path = tempfile.mkdtemp(
-                prefix=f'openhands_workspace_{sid}_'
-            )
-            logger.info(f'Created temporary workspace at {self._workspace_path}')
+        # Set up workspace - use current directory for CLI mode
+        self._workspace_path = os.getcwd()
+        logger.warning(
+            f'Using current directory as workspace: {self._workspace_path}. '
+            'The agent can EDIT files in this directory!'
+        )
 
         # Runtime tests rely on this being set correctly.
         self.config.workspace_mount_path_in_sandbox = self._workspace_path

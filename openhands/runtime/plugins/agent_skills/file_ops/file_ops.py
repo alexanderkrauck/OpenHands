@@ -19,7 +19,7 @@ Note:
 
 import os
 
-from openhands.linter import DefaultLinter, LintResult
+from openhands_aci.linter import DefaultLinter, LintResult
 
 CURRENT_FILE: str | None = None
 CURRENT_LINE = 1

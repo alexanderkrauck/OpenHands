@@ -82,11 +82,7 @@ class RemoteRuntime(ActionExecutionClient):
             )
         self.session.headers.update({'X-API-Key': self.config.sandbox.api_key})
 
-        if self.config.workspace_base is not None:
-            self.log(
-                'debug',
-                'Setting workspace_base is not supported in the remote runtime.',
-            )
+        # Remote runtime uses server-controlled workspace setup
         if self.config.sandbox.remote_runtime_api_url is None:
             raise ValueError(
                 'remote_runtime_api_url is required in the remote runtime.'

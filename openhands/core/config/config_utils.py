@@ -53,6 +53,10 @@ def model_defaults_to_dict(model: BaseModel) -> dict[str, Any]:
     """Serialize field information in a dict for the frontend, including type hints, defaults, and whether it's optional."""
     result = {}
     for name, field in model.__class__.model_fields.items():
+        # Skip deprecated fields to avoid accessing them
+        if hasattr(field, 'deprecated') and field.deprecated:
+            continue
+
         field_value = getattr(model, name)
 
         if isinstance(field_value, BaseModel):

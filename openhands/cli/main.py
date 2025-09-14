@@ -670,8 +670,7 @@ async def main_with_loop(loop: asyncio.AbstractEventLoop, args) -> None:
 
     if not should_override_cli_defaults:
         config.runtime = 'cli'
-        if not config.workspace_base:
-            config.workspace_base = os.getcwd()
+        # The CLI runtime will handle setting the workspace directory
         config.security.confirmation_mode = True
         agent_config = config.get_agent_config(config.default_agent)
         agent_config.cli_mode = True
@@ -700,11 +699,8 @@ async def main_with_loop(loop: asyncio.AbstractEventLoop, args) -> None:
         run_alias_setup_flow(config)
         # Don't set banner_shown = True here, so the ASCII art banner will still be shown
 
-    # TODO: Set working directory from config or use current working directory?
-    current_dir = config.workspace_base
-
-    if not current_dir:
-        raise ValueError('Workspace base directory not specified')
+    # Use current working directory as the base directory for CLI operations
+    current_dir = os.getcwd()
 
     if not check_folder_security_agreement(config, current_dir):
         # User rejected, exit application

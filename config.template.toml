@@ -12,8 +12,8 @@
 [core]
 # API keys and configuration for core services
 
-# Base path for the workspace
-#workspace_base = "./workspace"
+# Use [sandbox] volumes instead for workspace mounting
+# e.g., volumes = "/path/on/host:/workspace:rw"
 
 # Cache directory path
 #cache_dir = "/tmp/cache"
@@ -58,11 +58,7 @@
 # Path to mount the workspace in the sandbox
 #workspace_mount_path_in_sandbox = "/workspace"
 
-# Path to mount the workspace
-#workspace_mount_path = ""
-
-# Path to rewrite the workspace mount path to
-#workspace_mount_rewrite = ""
+# These settings are deprecated - use [sandbox] volumes instead
 
 # Run as openhands
 #run_as_openhands = true

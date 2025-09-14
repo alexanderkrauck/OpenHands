@@ -21,7 +21,7 @@ from openhands.events.observation import (
     FileWriteObservation,
     Observation,
 )
-from openhands.linter import DefaultLinter
+from openhands_aci.linter import DefaultLinter
 from openhands.llm.llm import LLM
 from openhands.llm.llm_registry import LLMRegistry
 from openhands.utils.chunk_localizer import Chunk, get_top_k_chunk_matches

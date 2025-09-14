@@ -41,10 +41,7 @@ class OpenHandsConfig(BaseModel):
         save_screenshots_in_trajectory: Whether to save screenshots in trajectory (in encoded image format).
         replay_trajectory_path: Path to load trajectory and replay. If provided, trajectory would be replayed first before user's instruction.
         search_api_key: API key for Tavily search engine (https://tavily.com/).
-        workspace_base (deprecated): Base path for the workspace. Defaults to `./workspace` as absolute path.
-        workspace_mount_path (deprecated): Path to mount the workspace. Defaults to `workspace_base`.
-        workspace_mount_path_in_sandbox (deprecated): Path to mount the workspace in sandbox. Defaults to `/workspace`.
-        workspace_mount_rewrite (deprecated): Path to rewrite the workspace mount path.
+        workspace_mount_path_in_sandbox: Path to mount the workspace in sandbox. Defaults to `/workspace`.
         cache_dir: Path to cache directory. Defaults to `/tmp/cache`.
         run_as_openhands: Whether to run as openhands.
         max_iterations: Maximum number of iterations allowed.
@@ -83,15 +80,10 @@ class OpenHandsConfig(BaseModel):
         description='API key for Tavily search engine (https://tavily.com/). Required for search functionality.',
     )
 
-    workspace_base: str | None = Field(default=None)
     workspace_mount_path_in_sandbox: str = Field(
         default=DEFAULT_WORKSPACE_MOUNT_PATH_IN_SANDBOX
     )
 
-    # Deprecated parameters - will be removed in a future version
-    workspace_mount_path: str | None = Field(default=None, deprecated=True)
-    workspace_mount_rewrite: str | None = Field(default=None, deprecated=True)
-    # End of deprecated parameters
 
     cache_dir: str = Field(default='/tmp/cache')
     run_as_openhands: bool = Field(default=True)
