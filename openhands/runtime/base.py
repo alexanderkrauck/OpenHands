@@ -195,7 +195,19 @@ class Runtime(FileEditRuntimeMixin):
         If called for instance by error handling, it could prevent recovery.
         """
         # Clean up MCP clients on close
-        asyncio.create_task(self._cleanup_mcp_clients())
+        try:
+            # Check if there's a running event loop
+            loop = asyncio.get_running_loop()
+            asyncio.create_task(self._cleanup_mcp_clients())
+        except RuntimeError:
+            # No running event loop (e.g., during shutdown)
+            # Try to create one if needed for cleanup
+            try:
+                asyncio.run(self._cleanup_mcp_clients())
+            except Exception as e:
+                # If cleanup fails during shutdown, log it but don't crash
+                from openhands.core.logger import openhands_logger as logger
+                logger.debug(f'Could not clean up MCP clients during shutdown: {e}')
 
     async def _cleanup_mcp_clients(self) -> None:
         """Clean up all MCP client connections."""
