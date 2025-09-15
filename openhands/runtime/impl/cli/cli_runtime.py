@@ -897,12 +897,13 @@ class CLIRuntime(Runtime):
             # Disconnect all persistent connections
             import asyncio
             async def disconnect_all():
-                for client in self._cached_mcp_clients:
-                    try:
-                        if hasattr(client, 'disconnect'):
-                            await client.disconnect()
-                    except Exception as e:
-                        logger.warning(f'Error disconnecting MCP client: {e}')
+                if self._cached_mcp_clients:
+                    for client in self._cached_mcp_clients:
+                        try:
+                            if hasattr(client, 'disconnect'):
+                                await client.disconnect()
+                        except Exception as e:
+                            logger.warning(f'Error disconnecting MCP client: {e}')
             
             # Run the async disconnect in a new event loop if needed
             try:

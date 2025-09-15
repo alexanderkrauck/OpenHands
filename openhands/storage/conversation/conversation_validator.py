@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 
 from openhands.core.config.utils import load_openhands_config
 from openhands.core.logger import openhands_logger as logger
-from openhands.server.config.server_config import ServerConfig
 from openhands.storage.conversation.conversation_store import ConversationStore
 from openhands.storage.data_models.conversation_metadata import ConversationMetadata
 from openhands.utils.conversation_summary import get_default_conversation_title
@@ -40,11 +39,10 @@ class ConversationValidator:
         user_id: str | None,
     ) -> ConversationMetadata:
         config = load_openhands_config()
-        server_config = ServerConfig()
-
+        # Use default ConversationStore implementation (no server config needed)
         conversation_store_class: type[ConversationStore] = get_impl(
             ConversationStore,
-            server_config.conversation_store_class,
+            None,
         )
         conversation_store = await conversation_store_class.get_instance(
             config, user_id
